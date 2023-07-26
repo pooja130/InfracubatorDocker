@@ -1,0 +1,37 @@
+﻿Docker Assignment 1 : 
+
+
+docker run -d -p 8080:80 --name my_nginx nginx
+
+
+docker logs my_nginx
+
+
+docker exec -it my_nginx /bin/bash
+
+
+docker stop my_nginx
+
+
+Docker Assignment 2 : 
+
+
+docker build -t my_golang_app .
+
+
+docker run -d -p 8080:8080 --name my_golang_container my_golang_app
+
+
+docker exec -it  my_golang_container /bin/bash
+
+
+curl http://localhost:8080
+
+
+docker tag my_golang_app:latest myusername/my_golang_app:v1
+
+
+docker history my_golang_app:latest
+
+
+docker push myusername/my_golang_app:v1
