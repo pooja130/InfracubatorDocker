@@ -28,10 +28,131 @@ docker exec -it  my_golang_container /bin/bash
 curl http://localhost:8080
 
 
-docker tag my_golang_app:latest myusername/my_golang_app:v1
+docker tag my_golang_app:latest pooja130/my_golang_app:v1
 
 
 docker history my_golang_app:latest
 
 
-docker push myusername/my_golang_app:v1
+docker push pooja130/my_golang_app:v1
+
+
+Docker Assignment 3 : 
+
+FROM golang:latest as builder
+
+
+WORKDIR /app
+
+
+COPY . .
+
+
+RUN go build -o app .
+
+
+FROM golang:latest
+
+
+WORKDIR /app
+
+
+COPY --from=builder /app/app .
+
+
+EXPOSE 8080
+
+
+CMD ["./app"]
+
+
+Docker Assignment 4 : 
+
+
+docker volume create my_volume
+
+
+docker run -d -v my_volume:/app --name container1 busybox tail -f /dev/null
+
+
+docker exec -it container1 sh
+
+
+echo "Hello from Container 1" > /app/file.txt
+exit
+
+
+docker run -d -v my_volume:/app --name container2 busybox tail -f /dev/null
+
+
+docker exec -it container2 sh
+
+
+cat /app/file.txt
+
+
+Docker Assignment 5 : 
+
+docker run -d --name redis-container redis
+
+
+docker build -t go-app-redis:v1 .
+
+
+docker run -d -e REDIS_HOST=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' redis-container) go-app-redis:v1
+
+
+curl http://localhost:8080/vote
+
+
+Docker Assignment 6 : 
+
+
+docker network create my_network
+
+
+docker run -d --name redis-container --network my_network redis
+
+
+docker run -d -e REDIS_HOST=redis-container --name go-app-container --network my_network go-app-redis:v1
+
+
+curl http://localhost:8080/vote
+
+
+
+
+
+
+
+Docker Assignment 7 : 
+docker-compose.yaml : 
+version: '3'
+services:
+  go-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: go-app-container
+    environment:
+      - REDIS_HOST=redis-container
+    ports:
+      - "8080:8080"
+    networks:
+      - my_network
+
+
+networks:
+  my_network:
+
+
+docker-compose up -d
+
+
+curl http://localhost:8080/
+
+
+curl -X POST http://localhost:8080/vote
+
+
+docker-compose down
