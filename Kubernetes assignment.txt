@@ -1,0 +1,559 @@
+﻿Assignment 1 : 
+
+Create a Pod specification for the metadataservice
+   1. image : luckyganesh/metadata-service:v1 ( for M1 chip - luckyganesh/metadata-service:v1-arm )
+   2. Port to be exposed 8080
+1. Check the logs
+2. Check the Pod IP
+3. Hit the POD ip with /metadata url path from either insider minikube ( minikube ssh ) or colima ( colima ssh ) based on whatever you are using 
+4. Describe the POD
+Exec into the container using /bin/sh command.
+Solution : 
+
+Yaml file 
+apiVersion: v1
+kind: Pod
+metadata:
+  name: metadata-service-pod
+spec:
+  containers:
+    - name: metadata-service
+      image: luckyganesh/metadata-service:v1
+      ports:
+        - containerPort: 8080
+
+
+
+kubectl apply -f metadata-pod.yaml
+
+
+kubectl logs metadata-service-pod
+
+kubectl get pod metadata-service-pod -o jsonpath='{.status.podIP}'
+
+
+colima ssh
+
+
+curl http://POD_IP:8080/metadata
+
+
+kubectl describe pod metadata-service-pod
+
+
+kubectl exec -it metadata-service-pod -- /bin/sh
+
+
+
+
+
+
+
+
+
+
+
+
+Assignment 2 : 
+
+
+Create ReplicaSet for the MetadataService and deploy in K8S cluster.
+Add livenessProbe and readinessProbe using spring actuator's /actuator/health endpoint - POST to create an meta entry in the database curl --header "Content-Type: application/json" \ -- request POST \ --data '("group”: "sunitparekh", "name": "city", "value": "Pune")' | http://pod-1p:8080/metadata GET all meta entry posted in step 1 curl http: / /pod-ip: 8080/metadata/
+
+
+Solution : 
+apiVersion: apps/v1
+kind: ReplicaSet
+metadata:
+  name: metadata-service-rs
+spec:
+  replicas: 3  
+  selector:
+    matchLabels:
+      app: metadata-service
+  template:
+    metadata:
+      labels:
+        app: metadata-service
+    spec:
+      containers:
+      - name: metadata-service
+        image: luckyganesh/metadata-service:v1
+        ports:
+        - containerPort: 8080
+        readinessProbe:
+          httpGet:
+            path: /actuator/health
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        livenessProbe:
+          httpGet:
+            path: /actuator/health
+            port: 8080
+          initialDelaySeconds: 10
+          periodSeconds: 15
+
+
+
+
+kubectl apply -f metadata-service-replicaset.yaml
+
+
+curl --header "Content-Type: application/json" \
+--request POST \
+--data '{"group": "sunitparekh", "name": "city", "value": "Pune"}' \
+http://pod-ip:8080/metadata
+
+
+curl http://pod-ip:8080/metadata/
+
+
+Assignment 3 : 
+- Create NodePort Service for the MetadataService and access following via NodePort from host machine
+- POST to create an meta entry in the database curl --header "Content-Type? application/json" \
+--request POST \
+.-data "("group": "sunitparekh", "name": "city", "value" "Pune")* I
+http://node-ip:nodeport/metadata
+GET all meta entry posted in step 1 curl http://node-ip:nodeport/metadata/
+NOTE: If GET returning empty array (no result) or only few entries, goto next exercise to learn why?
+
+
+Solution : 
+apiVersion: v1
+kind: Service
+metadata:
+  name: metadata-service-nodeport
+spec:
+  selector:
+    app: metadata-service  
+  type: NodePort
+  ports:
+    - port: 8080          
+      targetPort: 8080      
+      nodePort: 30000    
+
+
+kubectl apply -f metadata-service-nodeport.yaml
+
+
+curl --header "Content-Type: application/json" \
+--request POST \
+--data '{"group": "sunitparekh", "name": "city", "value": "Pune"}' \
+http://node-ip:30000/metadata
+
+
+
+
+curl http://node-ip:30000/metadata/
+
+
+
+
+
+
+
+
+Assignment 4 : 
+
+
+Deploy new Pod using mongodb image (https://hub.docker.com/ /mongo)
+Create ClusterIP service for mongodb with service name as mongo, so that database is available via mongo DNS name (mongo database runs by default on 27017 port)
+Change image in MetadataService to sunitparekh/metadata:v2.0 (connect to database at mongo hostname by passing
+MONGODB_URI=mongodb: //mongo/metadata environment variable inside container spec
+Try again POST and GET for Metadata Service, everything work as expected.
+NOTE: Remember to start mongo first and then meta service.
+
+Solution : 
+mongo-pod.yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: mongo-pod
+spec:
+  containers:
+  - name: mongo-container
+    image: mongo
+    ports:
+    - containerPort: 27017
+
+
+kubectl apply -f mongo-pod.yaml
+
+
+mongo-service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: mongo
+spec:
+  selector:
+    name: mongo-pod
+  ports:
+    - protocol: TCP
+      port: 27017
+      targetPort: 27017
+  clusterIP: None
+
+
+kubectl apply -f mongo-service.yaml
+
+
+metadata-service-deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: metadata-service
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: metadata-service
+  template:
+    metadata:
+      labels:
+        app: metadata-service
+    spec:
+      containers:
+      - name: metadata-service
+        image: sunitparekh/metadata:v2.0
+        ports:
+        - containerPort: 8080
+        env:
+        - name: MONGODB_URI
+          value: "mongodb://mongo/metadata"  
+
+
+kubectl apply -f metadata-service-deployment.yaml
+
+
+curl --header "Content-Type: application/json" \
+--request POST \
+--data '{"group": "sunitparekh", "name": "city", "value": "Pune"}' \
+http://metadata-service-ip:8080/metadata
+
+
+curl http://metadata-service-ip:8080/metadata/
+
+
+Assignment 5 : 
+
+
+- Create Deployment object for
+MetadataService
+Mongo Database
+NOTE: Avoid using ReplicaSet or Pod directly. Best practice is to use Deployment for everything even if you have just one pod.
+
+
+
+
+
+
+Solution : 
+metadata-service-deployment.yaml
+
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: metadata-service-deployment
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: metadata-service
+  template:
+    metadata:
+      labels:
+        app: metadata-service
+    spec:
+      containers:
+      - name: metadata-service
+        image: sunitparekh/metadata:v2.0 
+        ports:
+        - containerPort: 8080
+        env:
+        - name: MONGODB_URI
+          value: "mongodb://mongo/metadata"  
+
+
+kubectl apply -f metadata-service-deployment.yaml
+
+
+mongo-deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mongo-deployment
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mongo
+  template:
+    metadata:
+      labels:
+        app: mongo
+    spec:
+      containers:
+      - name: mongo-container
+        image: mongo
+        ports:
+        - containerPort: 27017
+
+
+kubectl apply -f mongo-deployment.yaml
+
+
+Assignment 6 : 
+
+Run the mongo database with the persistent volume using hostPath Read more documentation on how to setup mongodb with custom data folder path httos://hub.docker.com/ /mongo/ (the mount path for mongo should be /data/db) Delete and Recreate MongoDB pod and see no data loss
+
+
+Solution : 
+
+
+mkdir -p /mongo-data
+
+
+chown -R 1000:1000 /mongo-data
+
+
+Mongo-deployment.yaml
+
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mongo-deployment
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mongo
+  template:
+    metadata:
+      labels:
+        app: mongo
+    spec:
+      containers:
+      - name: mongo-container
+        image: mongo
+        ports:
+        - containerPort: 27017
+        volumeMounts:
+        - name: mongo-data
+          mountPath: /data/db
+      volumes:
+      - name: mongo-data
+        hostPath:
+          path: /mongo-data  
+
+
+kubectl apply -f mongo-deployment.yaml
+
+
+kubectl get pods
+
+
+kubectl delete pod mongo-deployment-<pod-id>
+
+
+
+
+Assignment 7 : 
+- Run the mongo database with the persistent volume using PV and PVC
+- Use hostPath to define PV
+- Delete and Recreate MongoDB pod and see no data loss
+
+
+Solution : 
+
+
+mkdir -p /mongo-data
+
+
+chown -R 1000:1000 /mongo-data
+
+
+Mongo-pv.yaml
+
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: mongo-pv
+spec:
+  capacity:
+    storage: 1Gi  
+  volumeMode: Filesystem
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: manual
+  hostPath:
+    path: "/mongo-data"  
+
+
+kubectl apply -f mongo-pv.yaml
+
+
+
+
+
+
+Mongo-pvc.yaml
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mongo-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi  
+  storageClassName: manual
+
+
+kubectl apply -f mongo-pvc.yaml
+
+
+mongo-deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mongo-deployment
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mongo
+  template:
+    metadata:
+      labels:
+        app: mongo
+    spec:
+      containers:
+      - name: mongo-container
+        image: mongo
+        ports:
+        - containerPort: 27017
+        volumeMounts:
+        - name: mongo-data
+          mountPath: /data/db
+      volumes:
+      - name: mongo-data
+        persistentVolumeClaim:
+          claimName: mongo-pvc 
+
+
+
+
+
+
+kubectl apply -f mongo-deployment.yaml
+
+
+kubectl get pods
+
+
+kubectl delete pod mongo-deployment-<pod-id>
+
+
+kubectl get pods
+
+
+
+
+Assignment 8 : 
+
+From Assignment-4, instead of creating env variable MONGODB_URI and assigning the value directly,
+Create a configmap named "mongodb-config" containing configuration data
+MONGODB 'URI
+Update the Deployment YAML to use the env variable from ConfigMap
+
+
+Solution : 
+
+
+mongodb-config.yaml 
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mongodb-config
+data:
+  MONGODB_URI: "mongodb://mongo/metadata"
+
+
+kubectl apply -f mongodb-config.yaml
+
+
+Updated deployment yaml [metadata-service-deployment.yaml] : 
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: metadata-service-deployment
+spec:
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: metadata-service
+    spec:
+      containers:
+        - name: metadata-service
+          image: sunitparekh/metadata:v2.0
+          env:
+            - name: MONGODB_URI
+              valueFrom:
+                configMapKeyRef:
+                  name: mongodb-config
+                  key: MONGODB_URI
+
+
+kubectl apply -f metadata-service-deployment.yaml
+
+
+Assignment 9 : 
+
+
+Use a secret mongo URL in metadata service
+Create a K8S Secret Object with mongo configuration url and pass it as ENV to metadata-service under key: MONGODB_URI
+
+apiVersion: v1
+kind: Secret
+metadata:
+  name: mongo-secret
+type: Opaque
+data:
+  MONGODB_URI: bW9uZ29kYjogL21vbmdvL21ldGFkYXRh
+
+
+
+Metadata-service-deployment.yaml : 
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: metadata-service-deployment
+spec:
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: metadata-service
+    spec:
+      containers:
+        - name: metadata-service
+          image: sunitparekh/metadata:v2.0
+          env:
+            - name: MONGODB_URI
+              valueFrom:
+                secretKeyRef:
+                  name: mongo-secret
+                  key: MONGODB_URI
+
+
+kubectl apply -f metadata-service-deployment.yaml
